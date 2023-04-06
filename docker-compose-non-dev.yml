@@ -24,6 +24,13 @@ x-superset-volumes: &superset-volumes
   - superset_home:/app/superset_home
 
 version: "3.7"
+
+networks:
+  web:
+    external: true
+  internal:
+    external: false
+
 services:
   redis:
     image: redis:7
@@ -31,6 +38,9 @@ services:
     restart: unless-stopped
     volumes:
       - redis:/data
+    networks:
+      - web
+      - internal
 
   db:
     env_file: docker/.env-non-dev
@@ -39,6 +49,9 @@ services:
     restart: unless-stopped
     volumes:
       - db_home:/var/lib/postgresql/data
+    networks:
+      - web
+      - internal
 
   superset:
     env_file: docker/.env-non-dev
@@ -51,17 +64,14 @@ services:
       - 8088:8088
     depends_on: *superset-depends-on
     volumes: *superset-volumes
-
-  superset-init:
-    image: *superset-image
-    container_name: superset_init
-    command: ["/app/docker/docker-init.sh"]
-    env_file: docker/.env-non-dev
-    depends_on: *superset-depends-on
-    user: "root"
-    volumes: *superset-volumes
-    healthcheck:
-      disable: true
+    labels:
+      - traefik.backend=dados
+      - traefik.docker.network=web
+      - traefik.frontend.rule=Host:dados.sementenegocios.com.br
+      - traefik.port=8088
+    networks:
+      - web
+      - internal
 
   superset-worker:
     image: *superset-image
@@ -74,6 +84,9 @@ services:
     volumes: *superset-volumes
     healthcheck:
       test: ["CMD-SHELL", "celery inspect ping -A superset.tasks.celery_app:app -d celery@$$HOSTNAME"]
+    networks:
+      - web
+      - internal
 
   superset-worker-beat:
     image: *superset-image
@@ -86,6 +99,9 @@ services:
     volumes: *superset-volumes
     healthcheck:
       disable: true
+    networks:
+      - web
+      - internal
 
 volumes:
   superset_home:
@@ -94,3 +110,4 @@ volumes:
     external: false
   redis:
     external: false
+
